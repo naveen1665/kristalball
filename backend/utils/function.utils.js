@@ -21,3 +21,8 @@ export const adminCheck=async (user_name)=>{
 export const adminValidationFailed=(response)=>{
     return response.status(403).json({ message: "Unauthorized - Admin access required" });
 }
+
+export const baseNotfound=(response)=>{
+    console.log("Base not found");
+    return response.status(404).json({message:"the Base id not found"})
+}

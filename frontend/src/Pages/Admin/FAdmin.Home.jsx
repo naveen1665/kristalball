@@ -3,6 +3,8 @@ import NavbarAdmin from '../../Components/Component.NavbarAdmin'
 import AdminDashboard from './Dashboard/FAdmin.Dashboard'
 import FAdminAddEquipments from './Equipment/FAdmin.AddEquipments';
 import FAdminBaseHome from './Bases/FAdmin.BaseHome';
+import FAdminImportExport from './ImportExport/FAdmin.ImportExport';
+import FAdminTransaction from './Transaction/FAdmin.Transaction';
 
 function AdminHome() {
   const [current, setCurrent] = useState("bases");
@@ -13,8 +15,8 @@ function AdminHome() {
       {current === "bases" && <AdminDashboard />}
       {current === "equipments" && <FAdminAddEquipments/>}
       {current === "managebases" && <FAdminBaseHome/>}
-      {current === "importexport" && <p className="ml-64 p-6">📊 Reports Page</p>}
-      {current === "transaction" && <p className="ml-64 p-6">💸 Transactions Page</p>}
+      {current === "importexport" && <FAdminImportExport/>}
+      {current === "transaction" && <FAdminTransaction/>}
     </div>
   )
 }

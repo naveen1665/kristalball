@@ -4,6 +4,7 @@ import {
   DELETE_SINGLE_BASE,
   GET_SINGLE_BASE,
   UPDATE_BASE_ASSESTS,
+  UPDATE_BASE_COMMANDER,
 } from '../Constants/Constants.ApiEndpoints';
 
 function DetailedBase({ user_name, base_id, setSelectedBase }) {
@@ -75,10 +76,11 @@ function DetailedBase({ user_name, base_id, setSelectedBase }) {
   // Save edited base
   const handleSave = async () => {
     try {
-      const response = await BackendClient.post(UPDATE_BASE_ASSESTS, {
+      const response = await BackendClient.post(UPDATE_BASE_COMMANDER, {
         user_name,
         base_id,
-        updatedData: formData,
+        commander_name: formData.base_commander
+        
       });
 
       if (response.status === 200) {
@@ -211,43 +213,64 @@ function DetailedBase({ user_name, base_id, setSelectedBase }) {
       </div>
 
       {/* Edit Modal */}
-      {isEditModalOpen && (
-        <Modal onClose={() => setIsEditModalOpen(false)}>
-          <h3 className="text-xl font-bold mb-5 text-white">Edit Base Info</h3>
+      {/* Edit Modal */}
+{isEditModalOpen && (
+  <Modal onClose={() => setIsEditModalOpen(false)}>
+    <h3 className="text-xl font-bold mb-5 text-white">Edit Base Commander</h3>
 
-          <div className="space-y-4">
-            {['base_name', 'base_location', 'base_commander'].map((field) => (
-              <div key={field}>
-                <label className="block text-sm text-gray-300 mb-1 capitalize">
-                  {field.replace(/_/g, ' ')}
-                </label>
-                <input
-                  type="text"
-                  name={field}
-                  value={formData[field]}
-                  onChange={handleInputChange}
-                  className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-            ))}
-          </div>
+    <div className="space-y-4">
+      {/* Base Name (Read-Only) */}
+      <div>
+        <label className="block text-sm text-gray-300 mb-1">Base Name</label>
+        <input
+          type="text"
+          value={formData.base_name}
+          disabled
+          className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-gray-400 cursor-not-allowed"
+        />
+      </div>
 
-          <div className="flex justify-end gap-3 mt-6">
-            <button
-              onClick={() => setIsEditModalOpen(false)}
-              className="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg transition"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
-            >
-              Save Changes
-            </button>
-          </div>
-        </Modal>
-      )}
+      {/* Base Location (Read-Only) */}
+      <div>
+        <label className="block text-sm text-gray-300 mb-1">Base Location</label>
+        <input
+          type="text"
+          value={formData.base_location}
+          disabled
+          className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-gray-400 cursor-not-allowed"
+        />
+      </div>
+
+      {/* Base Commander (Editable) */}
+      <div>
+        <label className="block text-sm text-gray-300 mb-1">Base Commander</label>
+        <input
+          type="text"
+          name="base_commander"
+          value={formData.base_commander}
+          onChange={handleInputChange}
+          className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none"
+        />
+      </div>
+    </div>
+
+    <div className="flex justify-end gap-3 mt-6">
+      <button
+        onClick={() => setIsEditModalOpen(false)}
+        className="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg transition"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={handleSave}
+        className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+      >
+        Save Changes
+      </button>
+    </div>
+  </Modal>
+)}
+
     </div>
   );
 }

@@ -1,8 +1,9 @@
+import { response } from "express";
 import { adminModel } from "../models/admin.model.js";
 import { baseModel } from "../models/base.model.js";
 import { commanderModel } from "../models/commander.model.js";
 import { logisticsOfficerModel } from "../models/logisticOfficer.model.js";
-import { adminCheck, adminValidationFailed, internalServerError, missingParameter } from "../utils/function.utils.js";
+import { adminCheck, adminValidationFailed, baseNotfound, internalServerError, missingParameter } from "../utils/function.utils.js";
 
 export const addNewBase=async(request,response)=>{
     const {user_name,base_id,base_name,base_commander,base_location,base_assets,base_import,base_export,base_sales}=request.body;
@@ -61,7 +62,7 @@ export const getSingleBase=async(request,response)=>{
         {
             return response.status(403).json({message:"Invalid Access"});
         }
-        const baseDetail=await baseModel.find();
+        const baseDetail=await baseModel.findOne({base_id}).lean();
         return response.status(200).json(baseDetail);
         
     } catch (err) {
@@ -141,138 +142,151 @@ export const updatedTransactions=async(request,response)=>{
 
 
 
-export const importAssests=async(request,response)=>{
+export const importAssests = async (request, response) => {
     try {
-        const {current_base_id,import_base_id,items,user_name}=request.body;
-        const userCheck= (await commanderModel.findOne({user_name})) || (await adminModel.findOne({user_name})) || (await logisticsOfficerModel.findOne({user_name}));
-        if(!userCheck)
-        {
-            return response.status(404).json({message:"No User found .."});
-        }
-        if(!current_base_id|| !import_base_id ||!items|| !user_name)
-        {
-            return response.status(400).json({message:"Missing Input fields .."});
-        }
-        const current_base_details=await baseModel.findOne({base_id:current_base_id});
-        const import_base_details=await baseModel.findOne({base_id:import_base_id});
-        if(!current_base_details || !import_base_details)
-        {
-            return response.status(400).json({message:"Bases Not found .."});
+        const { current_base_id, import_base_id, items, user_name } = request.body;
+
+        // Validate user
+        const userCheck = await commanderModel.findOne({ user_name }) ||
+                          await adminModel.findOne({ user_name }) ||
+                          await logisticsOfficerModel.findOne({ user_name });
+
+        if (!userCheck) {
+            return response.status(404).json({ message: "No User found" });
         }
 
-        items.forEach(item => {
-            const currentAsset=current_base_details.base_assets.find(
-                a=>a.equipment_id===item.equipment_id
-            );
-            if(currentAsset){
-                currentAsset.equipment_quantity+=item.equipment_quantity;
+        if (!current_base_id || !import_base_id || !items || !user_name) {
+            return response.status(400).json({ message: "Missing Input fields" });
+        }
+
+        // Get bases
+        const current_base_details = await baseModel.findOne({ base_id: current_base_id });
+        const import_base_details = await baseModel.findOne({ base_id: import_base_id });
+
+        if (!current_base_details || !import_base_details) {
+            return response.status(400).json({ message: "Bases Not found" });
+        }
+
+        // Process items
+        for (const item of items) {
+            const qty = parseInt(item.equipment_quantity, 10) || 0;
+
+            // Find asset in import base
+            const importAsset = import_base_details.base_assets.find(a => a.equipment_id === item.equipment_id);
+            if (!importAsset || importAsset.equipment_quantity < qty) {
+                return response.status(400).json({ message: `Not enough ${item.equipment_id} in base ${import_base_id}` });
             }
 
-            const importAssest=import_base_details.base_assets.find(
-                a=>a.equipment_id==item.equipment_id
-            )
+            // Deduct from import base
+            importAsset.equipment_quantity -= qty;
 
-            if(importAssest)
-            {
-                if(importAssest.equipment_quantity<item.equipment_quantity)
-                {
-                    return response.status(400).json({message:`Not enough stock of ${item.equipment_id}`});
-                }
-                importAssest.equipment_quantity-=item.equipment_quantity;
+            // Add to current base
+            let currentAsset = current_base_details.base_assets.find(a => a.equipment_id === item.equipment_id);
+            if (currentAsset) {
+                currentAsset.equipment_quantity += qty;
+            } else {
+                current_base_details.base_assets.push({ equipment_id: item.equipment_id, equipment_quantity: qty });
             }
+        }
 
-        });
-        import_base_details.base_export.push({base_id:current_base_id,equipments:items}); // import base base will export to other bases
-        current_base_details.base_import.push({base_id:import_base_id,equipments:items}); // here the current base import the assest from other bases
-        
+        // Record logs
+        current_base_details.base_import.push({ base_id: import_base_id, equipments: items });
+        import_base_details.base_export.push({ base_id: current_base_id, equipments: items });
+
         current_base_details.base_log.push({
             category: "IMPORT",
-            transaction_id: "I"+(new Date().getTime().toString()),
+            transaction_id: "I" + new Date().getTime(),
             equipments: items
         });
         import_base_details.base_log.push({
             category: "EXPORT",
-            transaction_id: "E"+(new Date().getTime().toString()),
+            transaction_id: "E" + new Date().getTime(),
             equipments: items
         });
 
         await current_base_details.save();
         await import_base_details.save();
-        return response.status(200).json({message:`Successfuly imported from ${import_base_id}`});
-        
+
+        return response.status(200).json({ message: `Successfully imported from ${import_base_id}` });
+
     } catch (err) {
         console.log(err.message);
-        return response.status(500).json({message:"Error while import the goods"});
-        
+        return response.status(500).json({ message: "Error while importing assets" });
     }
-}
+};
 
-
-export const exportAssests=async(request,response)=>{
+export const exportAssests = async (request, response) => {
     try {
-        const {current_base_id,export_base_id,items,user_name}=request.body;
-        const userCheck= (await commanderModel.findOne({user_name})) || (await adminModel.findOne({user_name})) || (await logisticsOfficerModel.findOne({user_name}));
-        if(!userCheck)
-        {
-            return response.status(404).json({message:"No User found .."});
-        }
-        if(!current_base_id|| !export_base_id ||!items|| !user_name)
-        {
-            return response.status(400).json({message:"Missing Input fields .."});
-        }
-        const current_base_details=await baseModel.findOne({base_id:current_base_id});
-        const export_base_details=await baseModel.findOne({base_id:import_base_id});
-        if(!current_base_details || !export_base_details)
-        {
-            return response.status(400).json({message:"Bases Not found .."});
+        const { current_base_id, export_base_id, items, user_name } = request.body;
+
+        // Validate user
+        const userCheck = await commanderModel.findOne({ user_name }) ||
+                          await adminModel.findOne({ user_name }) ||
+                          await logisticsOfficerModel.findOne({ user_name });
+
+        if (!userCheck) {
+            return response.status(404).json({ message: "No User found" });
         }
 
-        items.forEach(item => {
-            const currentAsset=current_base_details.base_assets.find(
-                a=>a.equipment_id===item.equipment_id
-            );
-            if(currentAsset){
-                if(currentAsset.equipment_quantity < item.equipment_quantity)
-                {
-                    return response.status(400).json({message:`Not enough ${item.equipment_id} in base ${current_base_id}`});
-                }
-                currentAsset.equipment_quantity-=item.equipment_quantity;
+        if (!current_base_id || !export_base_id || !items || !user_name) {
+            return response.status(400).json({ message: "Missing Input fields" });
+        }
+
+        // Get bases
+        const current_base_details = await baseModel.findOne({ base_id: current_base_id });
+        const export_base_details = await baseModel.findOne({ base_id: export_base_id });
+
+        if (!current_base_details || !export_base_details) {
+            return response.status(400).json({ message: "Bases Not found" });
+        }
+
+        // Process items
+        for (const item of items) {
+            const qty = parseInt(item.equipment_quantity, 10) || 0;
+
+            // Check current base inventory
+            const currentAsset = current_base_details.base_assets.find(a => a.equipment_id === item.equipment_id);
+            if (!currentAsset || currentAsset.equipment_quantity < qty) {
+                return response.status(400).json({ message: `Not enough ${item.equipment_id} in base ${current_base_id}` });
             }
 
-            const exportAssest=export_base_details.base_assets.find(
-                a=>a.equipment_id==item.equipment_id
-            )
+            // Deduct from current base
+            currentAsset.equipment_quantity -= qty;
 
-            if(exportAssest)
-            {
-                exportAssest.equipment_quantity+=item.equipment_quantity;
+            // Add to export base
+            let exportAsset = export_base_details.base_assets.find(a => a.equipment_id === item.equipment_id);
+            if (exportAsset) {
+                exportAsset.equipment_quantity += qty;
+            } else {
+                export_base_details.base_assets.push({ equipment_id: item.equipment_id, equipment_quantity: qty });
             }
+        }
 
-        });
-        export_base_details.base_import.push({base_id:current_base_id,equipments:items}); // import base base will export to other bases
-        current_base_details.base_export.push({base_id:export_base_id,equipments:items}); // here the current base import the assest from other bases
-        
+        // Record logs
+        export_base_details.base_import.push({ base_id: current_base_id, equipments: items });
+        current_base_details.base_export.push({ base_id: export_base_id, equipments: items });
+
         current_base_details.base_log.push({
             category: "EXPORT",
-            transaction_id: "E"+(new Date().getTime().toString()),
+            transaction_id: "E" + new Date().getTime(),
             equipments: items
         });
         export_base_details.base_log.push({
             category: "IMPORT",
-            transaction_id: "I"+(new Date().getTime().toString()),
+            transaction_id: "I" + new Date().getTime(),
             equipments: items
         });
 
         await current_base_details.save();
         await export_base_details.save();
-        return response.status(200).json({message:`Successfuly exported to ${export_base_id}`});
-        
+
+        return response.status(200).json({ message: `Successfully exported to ${export_base_id}` });
+
     } catch (err) {
         console.log(err.message);
-        return response.status(500).json({message:"Error while import the goods"});
-        
+        return response.status(500).json({ message: "Error while exporting assets" });
     }
-}
+};
 
 export const exportRequest=async(request,response)=>{
     try {
@@ -361,3 +375,48 @@ export const deleteBase=async(request,response)=>{
         return internalServerError(response,err.message,"deleteBase");       
     }
 }
+
+export const updateCommander=async(request,response)=>{
+    try {
+        const {user_name,base_id,commander_name}=request.body;
+        if(!user_name||!base_id||!commander_name)
+        {
+            return missingParameter(response);
+        }
+        if(!await adminCheck(user_name))
+        {
+            return adminValidationFailed(response);
+        }
+        const baseDetail=await baseModel.findOne({base_id});
+        if(!baseDetail)
+        {
+            return baseNotfound(response);
+        }
+        baseDetail.base_commander=commander_name;
+        await baseDetail.save();
+
+        return response.status(200).json({message:"Updated the comander"})
+
+        
+    } catch (err) {
+        return internalServerError(response,err.message,"update comander");
+    }
+}
+
+export const getTransaction = async (request, response) => {
+    try {
+        const baseDetail = await baseModel.find().lean();
+        let result = [];
+
+        baseDetail.forEach((base) => {
+            if (Array.isArray(base.base_log)) {
+                result.push(...base.base_log); // Spread operator to merge arrays
+            }
+        });
+
+        return response.status(200).json(result);
+
+    } catch (err) {
+        return internalServerError(response,err.message,"getTransaction");
+     }
+};
