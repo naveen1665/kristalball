@@ -11,7 +11,8 @@ function App() {
       <BrowserRouter>
       <Routes>
         <Route path='/' element={<Login/>}/>
-        <Route path='/home' element={<CommanderHome/>}/>
+        <Route path='/a/home' element={<AdminHome/>}/>
+        <Route path='/c/home' element={<CommanderHome/>}/>
       </Routes>
       </BrowserRouter>
     </AuthProvider>
